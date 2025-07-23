@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <title>3D Gözlük Görüntüleyici</title>
+  <title>3D Gözlük</title>
   <style>
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
@@ -29,7 +29,6 @@
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // ✅ PMREMGenerator zaten THREE içinden alınır, ayrıca import gerekmez
     new RGBELoader()
       .setDataType(THREE.UnsignedByteType)
       .load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/equirectangular/royal_esplanade_1k.hdr', function (texture) {
@@ -66,3 +65,4 @@
   </script>
 </body>
 </html>
+
