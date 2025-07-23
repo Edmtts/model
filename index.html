@@ -1,68 +1,117 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <title>3D Gözlük</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Model Görüntüleyici</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
 </head>
 <body>
-  <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
-    import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/GLTFLoader.js';
-    import { RGBELoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/RGBELoader.js';
-    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // Sahne, kamera ve renderer oluştur
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf8f8f8); // Arka plan rengini #f8f8f8 (açık gri) yap
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000); // Yakınlaştırma sınırını ayarla
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 1, 2.5);
+        // Işık ekle (daha parlak aydınlatma)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 3); // Ambient light (yoğunluğu artırıldı)
+        scene.add(ambientLight);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1;
-    document.body.appendChild(renderer.domElement);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 5); // Directional light (yoğunluğu artırıldı)
+        directionalLight.position.set(5, 10, 7).normalize();
+        scene.add(directionalLight);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
+        const pointLight = new THREE.PointLight(0xffffff, 5, 100); // Point light (yoğunluğu artırıldı)
+        pointLight.position.set(0, 10, 0);
+        scene.add(pointLight);
 
-    new RGBELoader()
-      .setDataType(THREE.UnsignedByteType)
-      .load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/equirectangular/royal_esplanade_1k.hdr', function (texture) {
-        const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+        // Çevre haritası (environment map) ekle
+        const textureLoader = new THREE.TextureLoader();
+        const envMap = textureLoader.load('https://threejs.org/examples/textures/equirectangular/venice_sunset_1k.hdr');
+        envMap.mapping = THREE.EquirectangularReflectionMapping;
+        scene.environment = envMap; // Sahneye çevre haritasını uygula
 
-        scene.environment = envMap;
-        scene.background = envMap;
+        // GLTF Loader ile modeli yükle
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+            'https://vmcore.luxottica.com/7895653327047/webGL/7895653327047_LOD0/7895653327047.glb',
+            function (gltf) {
+                const model = gltf.scene;
 
-        texture.dispose();
-        pmremGenerator.dispose();
+                // Modelin malzemelerini ayarla
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        // Genel malzeme ayarları
+                        child.material.metalness = 0.8; // Metaliklik (yansımalar için)
+                        child.material.roughness = 0.2; // Pürüzlülük (daha dengeli yüzey)
+                        child.material.envMapIntensity = 5; // Çevre haritası yoğunluğu (dengeli yansıma)
 
-        const loader = new GLTFLoader();
-        loader.load('8056262264034.glb', function (gltf) {
-          const model = gltf.scene;
-          scene.add(model);
-        }, undefined, function (error) {
-          console.error('Model yüklenemedi:', error);
+                        // Renk tonunu açık hale getir
+                        if (child.material.color) {
+                            child.material.color.multiplyScalar(1.2); // Renk doygunluğunu artır
+                        }
+
+                        // Camları şeffaf ve daha koyu yap
+                        if (child.name.includes("Lens_L_GEO") || child.name.includes("Lens_R_GEO")) { // Camları tanımlayan isimler
+                            child.material.transparent = true; // Şeffaflığı etkinleştir
+                            child.material.opacity = 1; // Şeffaflık seviyesi (0: tam şeffaf, 1: opak)
+                            child.material.color.multiplyScalar(0.5); // Cam rengini daha koyu yap
+                        }
+
+                        // Altın detaylar için özel ayarlar
+                        if (child.name.includes("Gold")) { // Altın detayları tanımlayan isimler
+                            child.material.metalness = 0.9; // Metalik yansıma
+                            child.material.roughness = 0.1; // Çok pürüzsüz yüzey
+                            child.material.envMapIntensity = 3; // Yansıma yoğunluğunu artır
+                            child.material.color = new THREE.Color(0xffd700); // Altın rengi (HEX: #FFD700)
+                        }
+                    }
+                });
+
+                scene.add(model);
+            },
+            undefined,
+            function (error) {
+                console.error(error);
+            }
+        );
+
+        // Kamerayı konumlandır (daha yakına getir)
+        camera.position.z = 2; // Kamerayı daha yakına getir
+
+        // OrbitControls ekle
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.25;
+        controls.minDistance = 0.1; // Dibine kadar yakınlaşma sınırı
+        controls.maxDistance = 10; // Uzaklaştırma sınırını ayarla
+
+        // Animasyon döngüsü
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Pencere boyutu değiştiğinde renderer'ı güncelle
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
         });
-      });
-
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-  </script>
+    </script>
 </body>
-</html>
+</html>https://rtr-viewer.luxottica.com/asset/environment/equirect/panorama.hdr.jpg
 
