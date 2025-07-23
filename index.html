@@ -2,58 +2,22 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3B Model Görüntüleyici</title>
+  <title>3D Gözlük Görüntüleyici</title>
   <style>
-    body { 
-      margin: 0;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
-    }
-    #loading {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      color: white;
-      background-color: rgba(0,0,0,0.5);
-      padding: 10px;
-      border-radius: 5px;
-      z-index: 100;
-    }
-    #error {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: red;
-      background-color: rgba(0,0,0,0.7);
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-      display: none;
-      z-index: 100;
-    }
-    canvas {
-      display: block;
-    }
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
-  <div id="loading">Model yükleniyor...</div>
-  <div id="error"></div>
-
   <script type="module">
-    // Three.js kütüphanelerini import et
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/+esm';
-    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
     import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/GLTFLoader.js';
     import { RGBELoader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/loaders/RGBELoader.js';
-    import { PMREMGenerator } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/pmrem/PMREMGenerator.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js';
 
-    // Sahne, kamera ve renderer oluştur
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 1, 5);
+    camera.position.set(0, 1, 2.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -62,87 +26,31 @@
     renderer.toneMappingExposure = 1;
     document.body.appendChild(renderer.domElement);
 
-    // OrbitControls ekle (fare ile etkileşim için)
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
 
-    // Işık ekle (modelin görünmesi için)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-    
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(1, 1, 1);
-    scene.add(directionalLight);
+    // ✅ PMREMGenerator zaten THREE içinden alınır, ayrıca import gerekmez
+    new RGBELoader()
+      .setDataType(THREE.UnsignedByteType)
+      .load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/equirectangular/royal_esplanade_1k.hdr', function (texture) {
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        const envMap = pmremGenerator.fromEquirectangular(texture).texture;
 
-    // Yükleme durumu için UI elementleri
-    const loadingElement = document.getElementById('loading');
-    const errorElement = document.getElementById('error');
+        scene.environment = envMap;
+        scene.background = envMap;
 
-    // Model yükleme fonksiyonu
-    function loadModel(modelPath) {
-      const loader = new GLTFLoader();
-      
-      loader.load(
-        modelPath,
-        (gltf) => {
-          // Model başarıyla yüklendiğinde
+        texture.dispose();
+        pmremGenerator.dispose();
+
+        const loader = new GLTFLoader();
+        loader.load('8056262264034.glb', function (gltf) {
           const model = gltf.scene;
-          model.scale.set(1, 1, 1);
-          
-          // Modelin sınırlarını hesapla ve merkezle
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          model.position.sub(center);
-          
           scene.add(model);
-          loadingElement.textContent = "Model yüklendi!";
-          setTimeout(() => loadingElement.style.display = 'none', 2000);
-        },
-        // Yükleme ilerlemesi
-        (xhr) => {
-          const percent = Math.round((xhr.loaded / xhr.total) * 100);
-          loadingElement.textContent = `Model yükleniyor: ${percent}%`;
-        },
-        // Hata durumu
-        (error) => {
+        }, undefined, function (error) {
           console.error('Model yüklenemedi:', error);
-          loadingElement.style.display = 'none';
-          errorElement.textContent = `Hata: Model yüklenemedi!\n\nDosya: ${modelPath}\n\nHata: ${error.message}`;
-          errorElement.style.display = 'block';
-        }
-      );
-    }
+        });
+      });
 
-    // Ortam ışığı yükle (isteğe bağlı)
-    function loadEnvironment() {
-      new RGBELoader()
-        .setDataType(THREE.UnsignedByteType)
-        .load(
-          'https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/textures/equirectangular/royal_esplanade_1k.hdr',
-          (texture) => {
-            const pmremGenerator = new PMREMGenerator(renderer);
-            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-            
-            scene.environment = envMap;
-            scene.background = envMap;
-            
-            texture.dispose();
-            pmremGenerator.dispose();
-            
-            // Ortam ışığı yüklendikten sonra modeli yükle
-            loadModel('8056262264034.glb');
-          },
-          undefined,
-          (error) => {
-            console.error('Ortam ışığı yüklenemedi:', error);
-            // Ortam ışığı yüklenemezse sadece modeli yükle
-            loadModel('8056262264034.glb');
-          }
-        );
-    }
-
-    // Animasyon döngüsü
     function animate() {
       requestAnimationFrame(animate);
       controls.update();
@@ -150,15 +58,11 @@
     }
     animate();
 
-    // Pencere boyutu değiştiğinde ayarları güncelle
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
-
-    // Uygulamayı başlat
-    loadEnvironment();
   </script>
 </body>
 </html>
